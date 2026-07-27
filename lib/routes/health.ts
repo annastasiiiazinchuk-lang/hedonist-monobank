@@ -16,6 +16,7 @@ export async function handleHealth(): Promise<Response> {
   return json({
     status: 'ok',
     mode: 'refactored-server',
+    release: 'hedonist-custom-line-items-2026-07-27',
     shopifyTokenReady,
     ...(shopifyTokenError ? { shopifyTokenError } : {}),
     novaPoshtaReady: Boolean(env.novaPoshtaApiKey),

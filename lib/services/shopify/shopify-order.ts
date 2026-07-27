@@ -315,9 +315,9 @@ function isMissingVariantOrderError(error: unknown): boolean {
 }
 
 export async function createShopifyOrder(body: CheckoutPayload, paymentAmount: number): Promise<ShopifyRestOrder> {
-  const payload = buildShopifyOrderPayload(body, paymentAmount);
+  const payload = buildShopifyOrderPayload(body, paymentAmount, { customLineItems: true });
   let data: { order?: ShopifyRestOrder };
-  let usedCustomLineItemFallback = false;
+  let usedCustomLineItemFallback = true;
 
   try {
     data = await shopifyRequest<{ order?: ShopifyRestOrder }>('/orders.json', {
