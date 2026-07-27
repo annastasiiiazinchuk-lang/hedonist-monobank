@@ -93,6 +93,24 @@ describe('Shopify order mapping', () => {
     ]);
   });
 
+  test('custom line item fallback sends title and price without variant id', () => {
+    const payload = buildShopifyOrderPayload(basePayload, getPaymentAmount(basePayload), {
+      customLineItems: true,
+    });
+    const lineItems = payload.order.line_items as Array<Record<string, unknown>>;
+
+    expect(lineItems[0]).toMatchObject({
+      title: 'Годинник',
+      price: '1200',
+      quantity: 1,
+    });
+    expect(lineItems[0].variant_id).toBeUndefined();
+    expect(lineItems[0].properties).toContainEqual({
+      name: '_original_variant_id',
+      value: '111',
+    });
+  });
+
   test('international delivery does not add extra shipping fee', () => {
     const internationalPayload: CheckoutPayload = {
       ...basePayload,
