@@ -26,10 +26,6 @@ type ShopifyGraphqlResponse<T> = {
   errors?: { message: string }[];
 };
 
-type LineItemOptions = {
-  customLineItems?: boolean;
-};
-
 function requireShopifyStoreDomain(): string {
   if (!env.shopifyStoreDomain) throw new Error('Missing SHOPIFY_STORE_DOMAIN');
   return env.shopifyStoreDomain;
@@ -136,52 +132,11 @@ export function buildShippingAddress(body: CheckoutPayload) {
   };
 }
 
-function buildLineItemProperties(
-  item: CheckoutPayload['goods'][number],
-  options: { includeVariantReference?: boolean } = {},
-) {
-  const variantId = asNumber(item.variant_id);
-  const properties = (item.properties || [])
-    .map((property) => ({
-      name: asString(property.name),
-      value: asString(property.value),
-    }))
-    .filter((property) => property.name && property.value);
-
-  if (options.includeVariantReference && variantId) {
-    properties.push({
-      name: '_original_variant_id',
-      value: String(variantId),
-    });
-  }
-
-  return properties;
-}
-
-function buildCustomLineItem(item: CheckoutPayload['goods'][number], quantity: number) {
-  const title = asString(item.name) || asString(item.title) || 'Custom item';
-  const variantTitle = asString(item.variant_title);
-  const lineItem: Record<string, unknown> = {
-    title: variantTitle && !title.includes(variantTitle) ? `${title} (${variantTitle})` : title,
-    price: String(asNumber(item.price)),
-    quantity,
-  };
-  const properties = buildLineItemProperties(item, { includeVariantReference: true });
-  if (properties.length > 0) {
-    lineItem.properties = properties;
-  }
-  return lineItem;
-}
-
-export function buildLineItems(body: CheckoutPayload, options: LineItemOptions = {}) {
+export function buildLineItems(body: CheckoutPayload) {
   return (body.goods || []).map((item) => {
     const variantId = asNumber(item.variant_id);
     const quantity = Math.max(1, Math.round(asNumber(item.quantity) || 1));
     const lineItem: Record<string, unknown> = { quantity };
-
-    if (options.customLineItems) {
-      return buildCustomLineItem(item, quantity);
-    }
 
     if (variantId) {
       lineItem.variant_id = variantId;
@@ -190,7 +145,12 @@ export function buildLineItems(body: CheckoutPayload, options: LineItemOptions =
       lineItem.price = String(asNumber(item.price));
     }
 
-    const properties = buildLineItemProperties(item);
+    const properties = (item.properties || [])
+      .map((property) => ({
+        name: asString(property.name),
+        value: asString(property.value),
+      }))
+      .filter((property) => property.name && property.value);
     if (properties.length > 0) {
       lineItem.properties = properties;
     }
@@ -257,15 +217,11 @@ export function buildShippingNoteAttributes(body: CheckoutPayload) {
   ].filter((attribute) => attribute.value);
 }
 
-export function buildShopifyOrderPayload(
-  body: CheckoutPayload,
-  paymentAmount: number,
-  options: LineItemOptions = {},
-) {
+export function buildShopifyOrderPayload(body: CheckoutPayload, paymentAmount: number) {
   const customer = body.customer || {};
   const paymentType = body.payment_type === 'prepayment' ? 'prepayment_200' : 'full_payment';
   const cartTotal = getCartTotal(body);
-  const lineItems = buildLineItems(body, options);
+  const lineItems = buildLineItems(body);
   const shippingPrice = 0;
 
   if (lineItems.length === 0) throw new Error('Missing cart goods for Shopify order');
@@ -307,36 +263,12 @@ export function buildShopifyOrderPayload(
   return { order, paymentType, prepaymentDiscount: 0, cartTotal };
 }
 
-function isMissingVariantOrderError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('Shopify error 422')
-    && message.includes('product variant')
-    && message.includes('not found');
-}
-
 export async function createShopifyOrder(body: CheckoutPayload, paymentAmount: number): Promise<ShopifyRestOrder> {
-  const payload = buildShopifyOrderPayload(body, paymentAmount, { customLineItems: true });
-  let data: { order?: ShopifyRestOrder };
-  let usedCustomLineItemFallback = true;
-
-  try {
-    data = await shopifyRequest<{ order?: ShopifyRestOrder }>('/orders.json', {
-      method: 'POST',
-      body: JSON.stringify({ order: payload.order }),
-    });
-  } catch (error) {
-    if (!isMissingVariantOrderError(error)) throw error;
-
-    console.warn('Shopify variant was not found; retrying order with custom line items:', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    const fallbackPayload = buildShopifyOrderPayload(body, paymentAmount, { customLineItems: true });
-    data = await shopifyRequest<{ order?: ShopifyRestOrder }>('/orders.json', {
-      method: 'POST',
-      body: JSON.stringify({ order: fallbackPayload.order }),
-    });
-    usedCustomLineItemFallback = true;
-  }
+  const payload = buildShopifyOrderPayload(body, paymentAmount);
+  const data = await shopifyRequest<{ order?: ShopifyRestOrder }>('/orders.json', {
+    method: 'POST',
+    body: JSON.stringify({ order: payload.order }),
+  });
 
   if (!data.order?.id) throw new Error('Shopify response missing order id');
   console.log('Shopify order created:', {
@@ -345,7 +277,6 @@ export async function createShopifyOrder(body: CheckoutPayload, paymentAmount: n
     financialStatus: data.order.financial_status,
     paymentType: payload.paymentType,
     prepaymentDiscount: payload.prepaymentDiscount,
-    usedCustomLineItemFallback,
   });
   return data.order;
 }
