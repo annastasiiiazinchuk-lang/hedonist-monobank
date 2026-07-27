@@ -121,24 +121,20 @@ export async function saveShopifyToken(shop: string, accessToken: string, scope?
 }
 
 export async function getShopifyAccessToken(): Promise<string> {
-  if (env.shopifyAdminAccessToken) return env.shopifyAdminAccessToken;
-
   const shop = env.shopifyStoreDomain;
   if (!shop) throw new Error('Missing SHOPIFY_STORE_DOMAIN');
 
   const token = await prisma.shopifyToken.findUnique({ where: { shop } });
-  if (!token?.accessToken) {
-    throw new Error('Missing Shopify Admin token. Open /auth?shop=your-store.myshopify.com first.');
-  }
+  if (token?.accessToken) return token.accessToken;
+  if (env.shopifyAdminAccessToken) return env.shopifyAdminAccessToken;
 
-  return token.accessToken;
+  throw new Error('Missing Shopify Admin token. Open /auth?shop=your-store.myshopify.com first.');
 }
 
 export async function hasShopifyToken(): Promise<boolean> {
-  if (env.shopifyAdminAccessToken) return true;
-  if (!env.shopifyStoreDomain) return false;
+  if (!env.shopifyStoreDomain) return Boolean(env.shopifyAdminAccessToken);
   const count = await prisma.shopifyToken.count({ where: { shop: env.shopifyStoreDomain } });
-  return count > 0;
+  return count > 0 || Boolean(env.shopifyAdminAccessToken);
 }
 
 export function clearTokenCache(): void {
