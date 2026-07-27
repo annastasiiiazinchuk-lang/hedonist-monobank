@@ -120,21 +120,42 @@ export async function saveShopifyToken(shop: string, accessToken: string, scope?
   });
 }
 
+export async function getShopifyTokenInfo(): Promise<{ ready: boolean; shop?: string }> {
+  const shop = env.shopifyStoreDomain;
+  const token = await prisma.shopifyToken.findUnique({ where: { shop } });
+  if (token?.accessToken) return { ready: true, shop: token.shop };
+
+  const latestToken = await prisma.shopifyToken.findFirst({ orderBy: { updatedAt: 'desc' } });
+  if (latestToken?.accessToken) return { ready: true, shop: latestToken.shop };
+  if (env.shopifyAdminAccessToken) return { ready: true, shop: shop || 'SHOPIFY_ADMIN_ACCESS_TOKEN' };
+
+  return { ready: false };
+}
+
 export async function getShopifyAccessToken(): Promise<string> {
   const shop = env.shopifyStoreDomain;
   if (!shop) throw new Error('Missing SHOPIFY_STORE_DOMAIN');
 
   const token = await prisma.shopifyToken.findUnique({ where: { shop } });
   if (token?.accessToken) return token.accessToken;
+
+  const latestToken = await prisma.shopifyToken.findFirst({ orderBy: { updatedAt: 'desc' } });
+  if (latestToken?.accessToken) {
+    console.warn('Using Shopify token saved under a different shop domain:', {
+      configuredShop: shop,
+      tokenShop: latestToken.shop,
+    });
+    return latestToken.accessToken;
+  }
+
   if (env.shopifyAdminAccessToken) return env.shopifyAdminAccessToken;
 
   throw new Error('Missing Shopify Admin token. Open /auth?shop=your-store.myshopify.com first.');
 }
 
 export async function hasShopifyToken(): Promise<boolean> {
-  if (!env.shopifyStoreDomain) return Boolean(env.shopifyAdminAccessToken);
-  const count = await prisma.shopifyToken.count({ where: { shop: env.shopifyStoreDomain } });
-  return count > 0 || Boolean(env.shopifyAdminAccessToken);
+  const info = await getShopifyTokenInfo();
+  return info.ready;
 }
 
 export function clearTokenCache(): void {

@@ -1,14 +1,17 @@
 import { env } from '../config/env';
 import { json } from '../http/responses';
 import { prisma } from '../prisma';
-import { hasShopifyToken } from '../services/shopify/shopify-auth';
+import { getShopifyTokenInfo } from '../services/shopify/shopify-auth';
 
 export async function handleHealth(): Promise<Response> {
   let shopifyTokenReady = false;
   let shopifyTokenError: string | undefined;
+  let shopifyTokenShop: string | undefined;
 
   try {
-    shopifyTokenReady = await hasShopifyToken();
+    const tokenInfo = await getShopifyTokenInfo();
+    shopifyTokenReady = tokenInfo.ready;
+    shopifyTokenShop = tokenInfo.shop;
   } catch (error) {
     shopifyTokenError = error instanceof Error ? error.message : String(error);
   }
@@ -18,6 +21,8 @@ export async function handleHealth(): Promise<Response> {
     mode: 'refactored-server',
     release: 'hedonist-custom-line-items-2026-07-27',
     shopifyTokenReady,
+    shopifyStoreDomain: env.shopifyStoreDomain,
+    ...(shopifyTokenShop ? { shopifyTokenShop } : {}),
     ...(shopifyTokenError ? { shopifyTokenError } : {}),
     novaPoshtaReady: Boolean(env.novaPoshtaApiKey),
     metaReady: Boolean(env.metaPixelId && env.metaAccessToken),
