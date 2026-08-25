@@ -132,6 +132,27 @@ export function buildShippingAddress(body: CheckoutPayload) {
   };
 }
 
+function normalizeShopifyCustomerPhone(value: unknown): string {
+  const phone = asString(value).trim();
+  if (!phone) return '';
+  if (phone.startsWith('+')) return `+${phone.slice(1).replace(/\D/g, '')}`;
+  return phone.replace(/[^\d+]/g, '');
+}
+
+export function buildShopifyCustomer(body: CheckoutPayload) {
+  const customer = body.customer || {};
+  const shopifyCustomer = {
+    first_name: asString(customer.first_name),
+    last_name: asString(customer.last_name),
+    phone: normalizeShopifyCustomerPhone(customer.phone),
+    email: asString(customer.email),
+  };
+
+  return Object.fromEntries(
+    Object.entries(shopifyCustomer).filter(([, value]) => value),
+  );
+}
+
 export function buildLineItems(body: CheckoutPayload) {
   return (body.goods || []).map((item) => {
     const variantId = asNumber(item.variant_id);
@@ -219,15 +240,16 @@ export function buildShippingNoteAttributes(body: CheckoutPayload) {
 
 export function buildShopifyOrderPayload(body: CheckoutPayload, paymentAmount: number) {
   const customer = body.customer || {};
+  const customerEmail = asString(customer.email);
   const paymentType = body.payment_type === 'prepayment' ? 'prepayment_200' : 'full_payment';
   const cartTotal = getCartTotal(body);
   const lineItems = buildLineItems(body);
   const shippingPrice = 0;
+  const shopifyCustomer = buildShopifyCustomer(body);
 
   if (lineItems.length === 0) throw new Error('Missing cart goods for Shopify order');
 
   const order: Record<string, unknown> = {
-    email: asString(customer.email),
     phone: asString(customer.phone),
     financial_status: 'pending',
     currency: 'UAH',
@@ -240,11 +262,15 @@ export function buildShopifyOrderPayload(body: CheckoutPayload, paymentAmount: n
     note_attributes: [
       { name: 'payment_type', value: paymentType },
       { name: 'shipping_type', value: asString(body.shipping_type) || 'ukraine' },
+      { name: 'customer_telegram', value: asString(customer.telegram) },
     ].filter((attribute) => attribute.value),
     shipping_address: buildShippingAddress(body),
     billing_address: buildShippingAddress(body),
     line_items: lineItems,
   };
+
+  if (Object.keys(shopifyCustomer).length > 0) order.customer = shopifyCustomer;
+  if (customerEmail) order.email = customerEmail;
 
   if (shippingPrice > 0) {
     order.shipping_lines = [

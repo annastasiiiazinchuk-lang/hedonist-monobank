@@ -6,7 +6,7 @@ import {
   getPaymentAmount,
   getShippingPrice,
 } from '../../lib/services/shopify/shopify-order';
-import type { CheckoutPayload } from '../../lib/types/checkout';
+import { checkoutPayloadSchema, type CheckoutPayload } from '../../lib/types/checkout';
 
 const basePayload: CheckoutPayload = {
   locale: 'uk',
@@ -52,12 +52,17 @@ describe('Shopify order mapping', () => {
     expect(getPaymentAmount(basePayload)).toBe(1200);
   });
 
-  test('order keeps contact phone without creating Shopify customer', () => {
+  test('order creates Shopify customer from contact fields', () => {
     const payload = buildShopifyOrderPayload(basePayload, getPaymentAmount(basePayload));
 
     expect(payload.order.email).toBe('test@example.com');
     expect(payload.order.phone).toBe('0682345729');
-    expect(payload.order.customer).toBeUndefined();
+    expect(payload.order.customer).toEqual({
+      first_name: 'Анастасія',
+      last_name: 'Зінчук',
+      phone: '0682345729',
+      email: 'test@example.com',
+    });
     expect(payload.order.shipping_address).toMatchObject({
       first_name: 'Анастасія',
       last_name: 'Зінчук',
@@ -72,6 +77,27 @@ describe('Shopify order mapping', () => {
       { name: 'payment_type', value: 'full_payment' },
       { name: 'shipping_type', value: 'ukraine' },
     ]);
+  });
+
+  test('email can be blank and telegram is kept as an order note', () => {
+    const body = checkoutPayloadSchema.parse({
+      ...basePayload,
+      customer: {
+        ...basePayload.customer,
+        email: '',
+        phone: '+380 68 234 57 29',
+        telegram: '@hedonist',
+      },
+    });
+    const payload = buildShopifyOrderPayload(body, getPaymentAmount(body));
+
+    expect(payload.order.email).toBeUndefined();
+    expect(payload.order.customer).toEqual({
+      first_name: 'Анастасія',
+      last_name: 'Зінчук',
+      phone: '+380682345729',
+    });
+    expect(payload.order.note_attributes).toContainEqual({ name: 'customer_telegram', value: '@hedonist' });
   });
 
   test('custom checkout orders do not add Shopify taxes', () => {

@@ -13,6 +13,7 @@ export const checkoutPayloadSchema = z.object({
     last_name: z.string().optional(),
     phone: z.string().optional(),
     email: z.string().email().optional().or(z.literal('')),
+    telegram: z.string().optional(),
   }).default({}),
   shipping_type: z.enum(['ukraine', 'international']).default('ukraine'),
   shipping: z.object({
