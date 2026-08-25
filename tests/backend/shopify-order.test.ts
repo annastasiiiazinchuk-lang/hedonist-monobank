@@ -97,7 +97,22 @@ describe('Shopify order mapping', () => {
       last_name: 'Зінчук',
       phone: '+380682345729',
     });
+    expect(payload.order.note).toBe('Telegram: @hedonist');
     expect(payload.order.note_attributes).toContainEqual({ name: 'customer_telegram', value: '@hedonist' });
+  });
+
+  test('order note combines customer comment and telegram', () => {
+    const body = checkoutPayloadSchema.parse({
+      ...basePayload,
+      customer: {
+        ...basePayload.customer,
+        telegram: '@hedonist',
+      },
+      comment: 'Подзвоніть перед відправкою',
+    });
+    const payload = buildShopifyOrderPayload(body, getPaymentAmount(body));
+
+    expect(payload.order.note).toBe('Подзвоніть перед відправкою\nTelegram: @hedonist');
   });
 
   test('custom checkout orders do not add Shopify taxes', () => {

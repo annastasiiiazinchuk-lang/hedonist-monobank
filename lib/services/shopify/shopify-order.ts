@@ -153,6 +153,17 @@ export function buildShopifyCustomer(body: CheckoutPayload) {
   );
 }
 
+export function buildShopifyOrderNote(body: CheckoutPayload): string {
+  const customer = body.customer || {};
+  const comment = asString(body.comment);
+  const telegram = asString(customer.telegram);
+
+  return [
+    comment,
+    telegram ? `Telegram: ${telegram}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 export function buildLineItems(body: CheckoutPayload) {
   return (body.goods || []).map((item) => {
     const variantId = asNumber(item.variant_id);
@@ -258,7 +269,7 @@ export function buildShopifyOrderPayload(body: CheckoutPayload, paymentAmount: n
     send_receipt: false,
     send_fulfillment_receipt: false,
     inventory_behaviour: 'decrement_obeying_policy',
-    note: asString(body.comment),
+    note: buildShopifyOrderNote(body),
     note_attributes: [
       { name: 'payment_type', value: paymentType },
       { name: 'shipping_type', value: asString(body.shipping_type) || 'ukraine' },
