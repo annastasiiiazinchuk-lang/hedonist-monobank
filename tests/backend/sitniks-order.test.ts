@@ -65,6 +65,7 @@ describe('Sitniks order mapping', () => {
     expect(payload.utm).toEqual({ source: 'facebook', campaign: 'summer' });
     expect(String(payload.managerComment)).toContain('Shopify order: #1001');
     expect(String(payload.managerComment)).toContain('Передплата 200 грн');
+    expect(String(payload.managerComment)).not.toContain('Shopify tag:');
     expect(String(payload.managerComment)).toContain('Сума товарів: 1200 грн');
     expect(String(payload.managerComment)).toContain('Годинник (44 мм) x 1');
     expect(String(payload.managerComment)).toContain('Текст для гравіювання на коробці: 1111');
@@ -74,6 +75,18 @@ describe('Sitniks order mapping', () => {
     expect(String(payload.managerComment)).not.toContain('Статус оплати');
     expect(String(payload.managerComment)).not.toContain('Залишок');
     expect(payload.payment).toBeUndefined();
+  });
+
+  test('includes telegram in manager comment when provided', () => {
+    const payload = buildSitniksOrderPayload({
+      ...basePayload,
+      customer: {
+        ...basePayload.customer,
+        telegram: '@hedonist',
+      },
+    }, { id: 123, name: '#1001' });
+
+    expect(String(payload.managerComment)).toContain('Telegram: @hedonist');
   });
 
   test('builds product rows by title without SKU', () => {
@@ -122,6 +135,7 @@ describe('Sitniks order mapping', () => {
     }, { id: 124, name: '#1002' });
 
     expect(String(payload.managerComment)).toContain('Повна оплата');
+    expect(String(payload.managerComment)).not.toContain('Shopify tag:');
     expect(String(payload.managerComment)).toContain('Тип доставки: закордон');
     expect(String(payload.managerComment)).toContain('Доставка: за кордон');
     expect(String(payload.managerComment)).toContain('Країна: Poland');
@@ -159,8 +173,29 @@ describe('Sitniks order mapping', () => {
 
     expect(comment).toContain('Оплату Monobank підтверджено: Передплата 200 грн');
     expect(comment).toContain('Shopify order: #1048');
+    expect(comment).not.toContain('Shopify tag:');
     expect(comment).toContain('Invoice: invoice-new');
     expect(comment).toContain('Сплачено онлайн: 200 грн');
     expect(comment).toContain('Залишок: 5800 грн');
+  });
+
+  test('builds full payment status comment without Shopify tag', () => {
+    const comment = buildSitniksPaymentStatusComment({
+      paymentType: 'full',
+      shopifyOrderName: '#1049',
+      shopifyOrderId: BigInt(124),
+      orderId: '124',
+      invoiceId: 'invoice-old',
+      cartTotal: 1200,
+    }, {
+      invoiceId: 'invoice-new',
+      status: 'success',
+      amount: 120000,
+      finalAmount: 120000,
+    });
+
+    expect(comment).toContain('Оплату Monobank підтверджено: Повна оплата');
+    expect(comment).not.toContain('Shopify tag:');
+    expect(comment).toContain('Залишок: 0 грн');
   });
 });

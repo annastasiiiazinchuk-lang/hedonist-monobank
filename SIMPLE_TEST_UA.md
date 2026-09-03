@@ -32,6 +32,16 @@ PORT=3000
 Для швидкого тесту можна також додати `SHOPIFY_ADMIN_ACCESS_TOKEN`.
 Тоді OAuth через `/auth` не потрібен.
 
+Для Meta Conversions API додай:
+
+```env
+META_PIXEL_ID=твій_meta_pixel_id
+META_ACCESS_TOKEN=твій_meta_access_token
+META_GRAPH_VERSION=v23.0
+```
+
+`META_ACCESS_TOKEN` потрібен тільки backend-у. У Shopify frontend вставляється лише Pixel ID.
+
 ## 2. Міграції
 
 ```bash
@@ -84,6 +94,7 @@ https://abc-123.ngrok-free.app/api/health
 
 ```js
 const API_BASE_URL = 'https://abc-123.ngrok-free.app';
+const META_PIXEL_ID = String(window.HEDONIST_META_PIXEL_ID || 'твій_meta_pixel_id').trim();
 ```
 
 Не додавай `/api/orders/create-invoice`, frontend додає цей шлях сам.
@@ -91,8 +102,9 @@ const API_BASE_URL = 'https://abc-123.ngrok-free.app';
 ## 7. Що має відбутися
 
 - Backend створює Shopify order.
+- Для повної оплати order створюється з тегом `full_not_paid`.
 - Для передплати order створюється з `financial_status: pending`, тегом `not_paid_200` без знижки до оплати.
 - Backend створює Monobank invoice.
 - Після успішної оплати webhook знаходить payment у БД.
 - Для передплати фінансовий статус не змінюється, тег стає `prepayment_200_paid`.
-- Для повної оплати backend додає payment transaction і ставить order у `paid`.
+- Для повної оплати backend додає payment transaction, ставить order у `paid`, тег стає `full_paid_ok`.

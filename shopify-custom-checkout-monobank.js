@@ -1,5 +1,6 @@
 (function () {
   const API_BASE_URL = 'https://hedonist-monobank.onrender.com';
+  const META_PIXEL_ID = String(window.HEDONIST_META_PIXEL_ID || '').trim();
   const PREPAYMENT_AMOUNT = 200;
   const INTERNATIONAL_DELIVERY_FEE = 0;
   const SCRIPT_VERSION = 'i18n-2026-06-18-1238';
@@ -79,6 +80,7 @@
       lastName: 'Прізвище',
       phone: 'Телефон',
       email: 'E-mail',
+      telegram: 'Telegram',
       comment: 'Коментар до замовлення',
       submit: 'Оформити замовлення',
       fullPayment: 'Повна оплата',
@@ -153,6 +155,7 @@
       lastName: 'Last name',
       phone: 'Phone',
       email: 'E-mail',
+      telegram: 'Telegram',
       comment: 'Order comment',
       submit: 'Place order',
       fullPayment: 'Full payment',
@@ -227,6 +230,7 @@
       lastName: 'Nazwisko',
       phone: 'Telefon',
       email: 'E-mail',
+      telegram: 'Telegram',
       comment: 'Komentarz do zamówienia',
       submit: 'Złóż zamówienie',
       fullPayment: 'Pełna płatność',
@@ -387,6 +391,7 @@
     setFieldLabel('input[name="last_name"], #last_name', 'lastName');
     setFieldLabel('input[name="phone"], #phone', 'phone');
     setFieldLabel('input[name="email"], #email', 'email');
+    setFieldLabel('input[name="telegram"], #telegram', 'telegram');
     setFieldLabel('textarea[name="comment"], #comment', 'comment');
 
     const fullPayment = form.querySelector('input[name="payment_type"][value="full"]')?.closest('label');
@@ -401,6 +406,34 @@
 
     if (submitBtn) submitBtn.textContent = t('submit');
     translateStaticTextNodes(document.body);
+  }
+
+  function ensureOptionalContactFields() {
+    const emailInput = form.querySelector('input[name="email"], #email');
+    if (emailInput) emailInput.required = false;
+
+    if (form.querySelector('input[name="telegram"], #telegram')) return;
+
+    const anchorInput = emailInput || form.querySelector('input[name="phone"], #phone');
+    if (!anchorInput?.parentNode) return;
+
+    const label = document.createElement('label');
+    label.htmlFor = 'telegram';
+    label.textContent = t('telegram');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'telegram';
+    input.name = 'telegram';
+    input.autocomplete = 'off';
+    input.inputMode = 'text';
+    input.placeholder = '@username';
+
+    const insertAfter = emailInput
+      ? form.querySelector('#email-error-msg') || emailInput
+      : anchorInput;
+    anchorInput.parentNode.insertBefore(label, insertAfter.nextSibling);
+    anchorInput.parentNode.insertBefore(input, label.nextSibling);
   }
 
   function findTextElement(root, text) {
@@ -432,6 +465,7 @@
     }
   }
 
+  ensureOptionalContactFields();
   applyStaticTranslations();
   enhanceDeliveryUi(form);
   npCityInput = document.querySelector('#np-city');
@@ -537,6 +571,63 @@
     const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
     return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function getInitializedMetaPixelIds() {
+    try {
+      if (typeof window.fbq !== 'function') return [];
+
+      const queue = Array.isArray(window.fbq.queue) ? window.fbq.queue : [];
+      const queuedPixelIds = queue
+        .filter((entry) => Array.isArray(entry) && entry[0] === 'init')
+        .map((entry) => String(entry[1] || '').trim())
+        .filter(Boolean);
+
+      if (typeof window.fbq.getState !== 'function') return queuedPixelIds;
+
+      const state = window.fbq.getState();
+      const pixels = typeof state?.pixels === 'function' ? state.pixels() : [];
+      const loadedPixelIds = pixels
+        .map((pixel) => {
+          if (typeof pixel?.get === 'function') return String(pixel.get('id') || '').trim();
+          return String(pixel?.id || '').trim();
+        })
+        .filter(Boolean);
+
+      return Array.from(new Set([...queuedPixelIds, ...loadedPixelIds]));
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function ensureMetaPixel() {
+    if (!META_PIXEL_ID || window.__hedonistMetaPixelReady === META_PIXEL_ID) return;
+
+    if (typeof window.fbq !== 'function') {
+      (function (f, b, e, v, n, t, s) {
+        if (f.fbq) return;
+        n = f.fbq = function () {
+          n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+        };
+        if (!f._fbq) f._fbq = n;
+        n.push = n;
+        n.loaded = true;
+        n.version = '2.0';
+        n.queue = [];
+        t = b.createElement(e);
+        t.async = true;
+        t.src = v;
+        s = b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t, s);
+      })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    }
+
+    if (!getInitializedMetaPixelIds().includes(META_PIXEL_ID)) {
+      window.fbq('init', META_PIXEL_ID);
+    }
+
+    window.fbq('track', 'PageView');
+    window.__hedonistMetaPixelReady = META_PIXEL_ID;
   }
 
   function collectTrackingData() {
@@ -1131,6 +1222,7 @@
     translateStaticTextNodes(document.body);
 
     setPaymentAmount();
+    ensureMetaPixel();
 
     if (!sessionStorage.getItem('hedonist_begin_checkout_tracked')) {
       sessionStorage.setItem('hedonist_begin_checkout_tracked', 'true');
@@ -1717,6 +1809,7 @@
         last_name: String(formData.get('last_name') || '').trim(),
         phone: String(formData.get('phone') || '').trim(),
         email: String(formData.get('email') || '').trim(),
+        telegram: String(formData.get('telegram') || '').trim(),
       },
       shipping_type: shippingType,
       shipping: shippingType === 'international'

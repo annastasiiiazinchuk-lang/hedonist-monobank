@@ -148,6 +148,7 @@ export function buildSitniksOrderPayload(
     `Shopify order: ${shopifyOrder.name || shopifyOrder.id}`,
     `Варіант оплати: ${paymentType}`,
     `Сума товарів: ${cartTotal} грн`,
+    asString(customer.telegram) ? `Telegram: ${asString(customer.telegram)}` : '',
     goodsComment ? `Товари:\n${goodsComment}` : '',
     deliveryComment,
   ].filter(Boolean).join('\n');

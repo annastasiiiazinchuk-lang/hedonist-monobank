@@ -4,7 +4,7 @@ Backend приймає дані з кастомної Shopify checkout-стор�
 
 ## Що працює
 
-- Повна оплата: після успішного webhook order переходить у `paid`.
+- Повна оплата: order створюється з тегом `full_not_paid`; після успішного webhook order переходить у `paid`, тег стає `full_paid_ok`.
 - Передплата: order створюється з `pending`, тегом `not_paid_200` без знижки до оплати; після оплати 200 грн фінансовий статус не змінюється, тег стає `prepayment_200_paid`.
 - Nova Poshta міста/відділення йдуть через backend.
 - Payment mapping зберігається у PostgreSQL, тому webhook не губиться після рестарту.
@@ -40,6 +40,8 @@ META_ACCESS_TOKEN=...
 META_GRAPH_VERSION=v23.0
 ```
 
+`META_ACCESS_TOKEN` тримай тільки на Render/backend. Не вставляй його у Shopify сторінку або frontend JS.
+
 `DATABASE_URL` Render підставляє сам з бази.
 
 ## 2. Shopify app
@@ -74,6 +76,7 @@ https://твій-render-домен.onrender.com/api/health/db
 
 ```js
 const API_BASE_URL = 'https://твій-render-домен.onrender.com';
+const META_PIXEL_ID = String(window.HEDONIST_META_PIXEL_ID || 'твій_meta_pixel_id').trim();
 ```
 
 Frontend має відправляти замовлення на:
@@ -86,3 +89,4 @@ POST /api/orders/create-invoice
 
 Після зміни env на Render зроби redeploy.
 Після зміни Shopify redirect URL потрібно заново пройти `/auth?...`, якщо токен ще не отриманий.
+Для Meta: після redeploy `/api/health` має показати `metaReady: true`, якщо `META_PIXEL_ID` і `META_ACCESS_TOKEN` задані.

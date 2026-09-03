@@ -295,7 +295,7 @@ export function buildShopifyOrderPayload(body: CheckoutPayload, paymentAmount: n
     ];
   }
 
-  if (paymentType === 'prepayment_200') order.tags = 'not_paid_200';
+  order.tags = paymentType === 'prepayment_200' ? 'not_paid_200' : 'full_not_paid';
 
   return { order, paymentType, prepaymentDiscount: 0, cartTotal };
 }
@@ -346,6 +346,7 @@ export function buildOrderUpdateAfterPayment(
     orderUpdate.tags = 'prepayment_200_paid';
   } else {
     orderUpdate.financial_status = 'paid';
+    orderUpdate.tags = 'full_paid_ok';
   }
 
   return orderUpdate;

@@ -52,6 +52,13 @@ describe('Shopify order mapping', () => {
     expect(getPaymentAmount(basePayload)).toBe(1200);
   });
 
+  test('full payment order starts pending with full_not_paid tag', () => {
+    const payload = buildShopifyOrderPayload(basePayload, getPaymentAmount(basePayload));
+
+    expect(payload.order.financial_status).toBe('pending');
+    expect(payload.order.tags).toBe('full_not_paid');
+  });
+
   test('order creates Shopify customer from contact fields', () => {
     const payload = buildShopifyOrderPayload(basePayload, getPaymentAmount(basePayload));
 
@@ -179,13 +186,13 @@ describe('Shopify order mapping', () => {
     ]);
   });
 
-  test('full payment after payment sets paid status and no prepayment tag', () => {
+  test('full payment after payment sets paid status and full_paid_ok tag', () => {
     const update = buildOrderUpdateAfterPayment(123, 1200, 'invoice-1', 'full', [
       { name: 'payment_type', value: 'full_payment' },
       { name: 'shipping_type', value: 'ukraine' },
     ]);
     expect(update.financial_status).toBe('paid');
-    expect(update.tags).toBeUndefined();
+    expect(update.tags).toBe('full_paid_ok');
     expect(update.note_attributes).toEqual([
       { name: 'payment_type', value: 'full_payment' },
       { name: 'shipping_type', value: 'ukraine' },
