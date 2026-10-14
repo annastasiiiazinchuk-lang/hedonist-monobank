@@ -26,6 +26,32 @@ type ShopifyGraphqlResponse<T> = {
   errors?: { message: string }[];
 };
 
+class ShopifyRequestError extends Error {
+  constructor(readonly status: number, readonly responseText: string) {
+    super(`Shopify error ${status}: ${responseText}`);
+    this.name = 'ShopifyRequestError';
+  }
+}
+
+function isCustomerPhoneTakenError(error: unknown): boolean {
+  if (!(error instanceof ShopifyRequestError) || error.status !== 422) return false;
+
+  try {
+    const { errors } = JSON.parse(error.responseText);
+    if (!errors || typeof errors !== 'object' || Array.isArray(errors)) return false;
+
+    const fields = Object.entries(errors);
+    return fields.length > 0 && fields.every(([field, messages]) =>
+      ['customer.phone_number', 'customer.phone', 'phone'].includes(field)
+      && Array.isArray(messages)
+      && messages.length > 0
+      && messages.every((message) => message === 'has already been taken'),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function requireShopifyStoreDomain(): string {
   if (!env.shopifyStoreDomain) throw new Error('Missing SHOPIFY_STORE_DOMAIN');
   return env.shopifyStoreDomain;
@@ -50,7 +76,7 @@ export async function shopifyRequest<T = Record<string, unknown>>(
   });
 
   const text = await response.text();
-  if (!response.ok) throw new Error(`Shopify error ${response.status}: ${text}`);
+  if (!response.ok) throw new ShopifyRequestError(response.status, text);
   return parseJsonObject<T>(text, 'Shopify');
 }
 
@@ -302,10 +328,32 @@ export function buildShopifyOrderPayload(body: CheckoutPayload, paymentAmount: n
 
 export async function createShopifyOrder(body: CheckoutPayload, paymentAmount: number): Promise<ShopifyRestOrder> {
   const payload = buildShopifyOrderPayload(body, paymentAmount);
-  const data = await shopifyRequest<{ order?: ShopifyRestOrder }>('/orders.json', {
+  const createOrder = (order: Record<string, unknown>) => shopifyRequest<{ order?: ShopifyRestOrder }>('/orders.json', {
     method: 'POST',
-    body: JSON.stringify({ order: payload.order }),
+    body: JSON.stringify({ order }),
   });
+  let data: { order?: ShopifyRestOrder };
+
+  try {
+    data = await createOrder(payload.order);
+  } catch (error) {
+    if (!isCustomerPhoneTakenError(error)) throw error;
+
+    // Shopify rejected the order, so it is safe to retry once. Keep the
+    // recipient's phone in both addresses without assigning it to a profile.
+    const order = { ...payload.order };
+    delete order.phone;
+    const customer = { ...(order.customer as Record<string, unknown> | undefined) };
+    delete customer.phone;
+    if (Object.keys(customer).length > 0) {
+      order.customer = customer;
+    } else {
+      delete order.customer;
+    }
+
+    console.warn('Shopify customer phone is already assigned; retrying order with delivery phone only');
+    data = await createOrder(order);
+  }
 
   if (!data.order?.id) throw new Error('Shopify response missing order id');
   console.log('Shopify order created:', {

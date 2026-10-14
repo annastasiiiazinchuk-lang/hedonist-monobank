@@ -19,7 +19,7 @@ export async function handleHealth(): Promise<Response> {
   return json({
     status: 'ok',
     mode: 'refactored-server',
-    release: 'hedonist-catalog-line-items-2026-07-27',
+    release: 'hedonist-customer-phone-conflict-2026-10-14',
     shopifyTokenReady,
     shopifyStoreDomain: env.shopifyStoreDomain,
     ...(shopifyTokenShop ? { shopifyTokenShop } : {}),
