@@ -83,6 +83,11 @@ export async function processMonobankWebhook(body: MonobankWebhookBody): Promise
       updatedPayment = await markPaymentSuccess(storedPayment.id, body);
     }
 
+    // Track the confirmed payment independently from Shopify order edits.
+    await sendMetaPurchaseEvent(payment, body).catch((error) => {
+      console.error('Failed to send Meta Purchase:', error);
+    });
+
     await syncSitniksAfterMonobankSuccess(updatedPayment, body);
 
     if (env.shopifyPaymentUpdateDelaySeconds > 0) {
@@ -100,10 +105,6 @@ export async function processMonobankWebhook(body: MonobankWebhookBody): Promise
     } else {
       await syncShopifyAfterMonobankSuccess(payment, body);
     }
-
-    await sendMetaPurchaseEvent(payment, body).catch((error) => {
-      console.error('Failed to send Meta Purchase:', error);
-    });
 
     return json({ ok: true });
   } catch (error) {
